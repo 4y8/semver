@@ -1,5 +1,5 @@
 (*
-  Cours "Sémantique et Application à la Vérification de programmes"
+  type tCours "Sémantique et Application à la Vérification de programmes"
 
   Ecole normale supérieure, Paris, France / CNRS / INRIA
 *)

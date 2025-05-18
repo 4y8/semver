@@ -1,0 +1,107 @@
+open Frontend
+open AbstractSyntax
+open ControlFlowGraph
+
+module IMap = Map.Make(Int)
+module IEMap = Map.Make(struct type t = int_expr let compare = compare end)
+
+module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
+  Domain.DOMAIN = struct
+  type t = D.t IMap.t
+
+  let init =
+    IMap.of_list (List.map (fun v -> v.var_id, D.const Z.zero) V.support)
+  let bottom = IMap.of_list (List.map (fun v -> v.var_id, D.bottom) V.support)
+
+  let rec eval env e =
+    let v, m = match e with
+      | CFG_int_unary (op, e) ->
+        let v, m = eval env e in
+        D.unary v op, m
+      | CFG_int_binary (op, e, e') ->
+        let v, m = eval env e in
+        let v', m' = eval env e' in
+        D.binary v v' op,
+        IEMap.merge (fun _ o o' -> if o = None then o' else o) m m'
+      | CFG_int_var v -> IMap.find v.var_id env, IEMap.empty
+      | CFG_int_const n -> D.const n, IEMap.empty
+      | CFG_int_rand (a, b) -> D.rand a b, IEMap.empty
+    in
+    v, IEMap.add e v m
+
+  let assign env {var_id; _} e =
+    let v, _ = eval env e in
+    IMap.add var_id v env
+
+  exception Bottom
+
+  let meet m m' =
+    try
+      IMap.merge
+        (fun _ e e' -> match e, e' with
+           | None, v | v, None -> v
+           | Some v, Some v' ->
+             let m = D.meet v v' in
+             if D.is_bottom m then raise Bottom else Some m)
+        m m'
+    with
+      Bottom -> bottom
+
+  let join = IMap.merge
+      (fun _ e e' -> match e, e' with
+         | None, v | v, None -> v
+         | Some v, Some v' -> Some (D.join v v'))
+
+  let rec elim_not = function
+    | CFG_bool_rand -> CFG_bool_rand
+    | CFG_bool_const b -> CFG_bool_const (not b)
+    | CFG_bool_unary (AST_NOT, e) -> e
+    | CFG_compare (op, e, e') ->
+      let cop = match op with
+        | AST_EQUAL -> AST_NOT_EQUAL
+        | AST_NOT_EQUAL -> AST_EQUAL
+        | AST_GREATER_EQUAL -> AST_LESS
+        | AST_GREATER -> AST_LESS_EQUAL
+        | AST_LESS_EQUAL -> AST_GREATER
+        | AST_LESS -> AST_GREATER_EQUAL
+      in CFG_compare (cop, e, e')
+    | CFG_bool_binary (op, e, e') ->
+      let ne = CFG_bool_unary (AST_NOT, e) in
+      let ne' = CFG_bool_unary (AST_NOT, e') in
+      match op with
+      | AST_AND -> CFG_bool_binary (AST_OR, ne, ne')
+      | AST_OR -> CFG_bool_binary (AST_AND, ne, ne')
+
+  let rec guard env = function
+    | CFG_bool_const true -> env
+    | CFG_bool_const false -> bottom
+    | CFG_bool_rand -> bottom
+    | CFG_bool_unary (AST_NOT, e) -> guard env (elim_not e)
+    | CFG_bool_binary (AST_AND, e, e') -> meet (guard env e) (guard env e')
+    | CFG_bool_binary (AST_OR, e, e') -> join (guard env e) (guard env e')
+    | CFG_compare (op, e, e') ->
+      let v, m = eval env e in
+      let v', m' = eval env e' in
+      let m = IEMap.merge (fun _ o o' -> if o = None then o' else o) m m' in
+      let r, r' = D.compare v v' op in
+      let rec bwd_expr r = function
+        | CFG_int_const n ->
+          if D.(leq (const n) r)
+          then IMap.empty
+          else bottom
+        | CFG_int_rand (a, b) ->
+          if D.(is_bottom @@ meet (rand a b) r)
+          then bottom
+          else IMap.empty
+        | CFG_int_var {var_id; _} ->
+          IMap.singleton var_id (D.meet r IMap.(find var_id env))
+        | CFG_int_unary (op, e) ->
+          bwd_expr D.(bwd_unary (IEMap.find e m) op r) e
+        | CFG_int_binary (op, e, e') ->
+          let r, r' = D.bwd_binary (IEMap.find e m) (IEMap.find e' m) op r in
+          meet (bwd_expr r e) (bwd_expr r' e')
+      in
+      meet env (meet (bwd_expr r e) (bwd_expr r' e'))
+
+  let pp _ _ = ()
+end
