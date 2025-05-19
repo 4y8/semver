@@ -31,6 +31,9 @@ module type DOMAIN = sig
   (* empty set of environments *)
   val bottom : t
 
+  (* top environment *)
+  val top : t
+
   (* assign an integer expression to a variable *)
   val assign : t -> var -> int_expr -> t
 
