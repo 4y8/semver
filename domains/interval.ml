@@ -61,38 +61,40 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
     | Fin (a, b), Fin (a', b') ->
       let c = Z.max a a' in
       let d = Z.min b b' in
-      if Z.compare c d <= 0 then
-        Fin (c, d)
-      else Bot
+      fin (c, d)
     | MInf n, PInf n' | PInf n', MInf n
     | MInf n, Fin (n', _) | Fin (n', _), MInf n
     | PInf n', Fin (_, n) | Fin (_, n), PInf n'-> fin (n', n)
     | MInf n, MInf n' -> MInf Z.(min n n')
-    | PInf n, PInf n' -> PInf Z.(min n n')
+    | PInf n, PInf n' -> PInf Z.(max n n')
     | Bot, _ | _, Bot -> Bot
 
   let rec compare n n' = function
     | AST_EQUAL -> let e = meet n n' in e, e
     | AST_NOT_EQUAL ->
-      if n = Bot || n' = Bot then Bot, Bot else n, n'
-    | AST_LESS | AST_LESS_EQUAL ->
-      let n', n = compare n' n AST_GREATER_EQUAL in
+      begin match n, n' with
+        | Bot, _ | _, Bot -> Bot, Bot
+        | Fin (a, b), Fin (c, d) when a = b && b = c && c = d -> Bot, Bot
+        | n, n' -> n, n'
+      end
+    | AST_GREATER_EQUAL
+    | AST_GREATER ->
+      let n', n = compare n' n AST_LESS in
       n, n'
-    | AST_GREATER_EQUAL | AST_GREATER ->
-      if n = Bot || n' = Bot then Bot, Bot else
-        let l = match n' with
-          | Bot -> failwith "impossible"
-          | PInf _
-          | Top -> Top
-          | MInf a | Fin (_, a) -> MInf a
-        in 
-        let r = match n' with
-          | Bot -> failwith "impossible"
-          | MInf _
-          | Top -> Top
-          | PInf a | Fin (a, _) -> PInf a
-        in 
-        meet l n, meet r n'
+    | AST_LESS | AST_LESS_EQUAL ->
+      let l = match n' with
+        | Bot -> Bot
+        | PInf _
+        | Top -> Top
+        | MInf a | Fin (_, a) -> MInf a
+      in
+      let r = match n with
+        | Bot -> Bot
+        | MInf _
+        | Top -> Top
+        | PInf a | Fin (a, _) -> PInf a
+      in
+      meet l n, meet r n'
 
   let bwd_unary v op r = 
     meet v (unary r op)

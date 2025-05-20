@@ -9,6 +9,11 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
   Domain.DOMAIN = struct
   type t = D.t IMap.t
 
+  let pp fmt m =
+    Format.fprintf fmt "@[";
+    IMap.iter (fun k v -> Format.fprintf fmt "%d: %a;@ " k D.pp v) m;
+    Format.fprintf fmt "@]"
+
   let init =
     IMap.of_list (List.map (fun v -> v.var_id, D.const Z.zero) V.support)
   let bottom = IMap.of_list (List.map (fun v -> v.var_id, D.bottom) V.support)
@@ -77,7 +82,7 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
   let rec guard env = function
     | CFG_bool_const true -> env
     | CFG_bool_const false -> bottom
-    | CFG_bool_rand -> bottom
+    | CFG_bool_rand -> env
     | CFG_bool_unary (AST_NOT, e) -> guard env (elim_not e)
     | CFG_bool_binary (AST_AND, e, e') -> meet (guard env e) (guard env e')
     | CFG_bool_binary (AST_OR, e, e') -> join (guard env e) (guard env e')
@@ -86,6 +91,7 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
       let v', m' = eval env e' in
       let m = IEMap.merge (fun _ o o' -> if o = None then o' else o) m m' in
       let r, r' = D.compare v v' op in
+      Format.printf "%a %a %a %a\n" D.pp v D.pp v' D.pp r D.pp r';
       let rec bwd_expr r = function
         | CFG_int_const n ->
           if D.(leq (const n) r)
@@ -105,7 +111,6 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
       in
       meet env (meet (bwd_expr r e) (bwd_expr r' e'))
 
-  let is_bottom = (=) bottom
 
   let widen = IMap.merge (fun _ o o' -> match o, o' with
       | None, o | o, None -> o
@@ -121,8 +126,5 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
 
   let leq m m' = IMap.for_all (fun var v -> D.leq v (IMap.find var m')) m
 
-  let pp fmt m =
-    Format.fprintf fmt "@[";
-    IMap.iter (fun k v -> Format.fprintf fmt "%d: %a;@ " k D.pp v) m;
-    Format.fprintf fmt "@]"
+  let is_bottom m = leq m bottom
 end

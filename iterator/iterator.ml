@@ -52,11 +52,10 @@ module Iterator (D : Domain.DOMAIN) = struct
         let treat_instr (v, {arc_inst; _}) = match arc_inst with
           | CFG_skip _ -> v
           | CFG_assign (var, e) -> D.assign v var e
-          | CFG_guard e -> D.guard v e
-          | CFG_assert (e, pos) ->
-            if not D.(is_bottom @@
-                      guard v (CFG_bool_unary (AbstractSyntax.AST_NOT, e))) then
-              assertion_failed e pos;
+          | CFG_guard e ->
+            Format.printf "guard %d: %a, %a\n" hd.node_id D.pp v D.pp (D.guard v e);
+            D.guard v e
+          | CFG_assert (e, _) ->
             D.guard v e
           | CFG_call f ->
             let m = match FuncHash.find_opt memo_funcs f with
@@ -101,6 +100,15 @@ let iterate cfg =
   let module I = Iterator(D) in
   let map = I.iter cfg in
   let _ = Random.self_init () in
+  let check_assertation {arc_inst; arc_src; _} = match arc_inst with
+    | CFG_assert (e, pos) ->
+      let v = NodeMap.find arc_src map in
+      if not D.(is_bottom @@
+                guard v (CFG_bool_unary (AbstractSyntax.AST_NOT, e))) then
+        assertion_failed e pos;
+    | _ -> ()
+  in
+  List.iter check_assertation cfg.cfg_arcs;
   let iter_node node : unit = Format.printf "<%i>: %a@ " node.node_id D.pp (NodeMap.find node map) in
   Format.printf "Node Values:@   @[<v 0>" ;
   List.iter iter_node cfg.cfg_nodes ;
