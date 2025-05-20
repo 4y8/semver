@@ -151,5 +151,10 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
     | PInf n, MInf n' -> fin (n, n')
 
   let is_bottom = (=) Bot
-  let pp _ _ = ()
+  let pp fmt = function
+    | Top -> Format.fprintf fmt "⊤"
+    | Bot -> Format.fprintf fmt "⊥"
+    | MInf n -> Format.fprintf fmt "]-∞;%a]" Z.pp_print n
+    | PInf n -> Format.fprintf fmt "[%a;+[∞" Z.pp_print n
+    | Fin (a, b) -> Format.fprintf fmt "[%a;%a]" Z.pp_print a Z.pp_print b
 end

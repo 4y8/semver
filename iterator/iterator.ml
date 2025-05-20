@@ -33,11 +33,13 @@ module Iterator (D : Domain.DOMAIN) = struct
     end
 
   module DMap = Map.Make(struct type t = D.t let compare = compare end)
+  let out_nodes {node_out; _} = List.map (fun {arc_dst; _} -> arc_dst) node_out
   let iter cfg =
     let widening_points = Hashtbl.create 4096 in
     dfs (Hashtbl.create 4096) widening_points cfg.cfg_init_entry;
     List.iter (fun {func_entry; _} ->
         dfs (Hashtbl.create 4096) widening_points func_entry) cfg.cfg_funcs;
+    let memo_funcs = FuncHash.create 4096 in
     let rec loop map = function
       | [] -> map
       | hd :: tl ->
@@ -47,7 +49,6 @@ module Iterator (D : Domain.DOMAIN) = struct
               | None -> D.top, arc
               | Some v -> v, arc) hd.node_in
         in
-        let memo_funcs = FuncHash.create 4096 in
         let treat_instr (v, {arc_inst; _}) = match arc_inst with
           | CFG_skip _ -> v
           | CFG_assign (var, e) -> D.assign v var e
@@ -79,18 +80,28 @@ module Iterator (D : Domain.DOMAIN) = struct
         in let tl =
           if NodeMap.find_opt hd map = Some v
           then tl
-          else List.map (fun {arc_dst; _} -> arc_dst) hd.node_out @ tl
+          else out_nodes hd @ tl
         in
         loop (NodeMap.add hd v map) tl
     in
-    
+    let m = loop (NodeMap.singleton cfg.cfg_init_entry D.init)
+      (out_nodes cfg.cfg_init_entry)
+    in
+    let rec search_main = function
+      | [] -> failwith "file has no main function"
+      | {func_name; func_entry; _} :: _ when String.starts_with ~prefix:"main" func_name ->
+        let m = NodeMap.add func_entry (NodeMap.find cfg.cfg_init_exit m) m in
+        loop m (out_nodes func_entry)
+      | _ :: tl -> search_main tl
+    in search_main cfg.cfg_funcs
 end
 
 let iterate cfg =
+  let module D = Domains.Non_relational.NonRelational(struct let support = cfg.cfg_vars end)(Domains.Interval.Interval) in
+  let module I = Iterator(D) in
+  let map = I.iter cfg in
   let _ = Random.self_init () in
-  let iter_arc arc : unit = match arc.arc_inst with _ -> failwith "TODO" in
-  let iter_node node : unit = Format.printf "<%i>: ⊤@ " node.node_id in
-  List.iter iter_arc cfg.cfg_arcs ;
+  let iter_node node : unit = Format.printf "<%i>: %a@ " node.node_id D.pp (NodeMap.find node map) in
   Format.printf "Node Values:@   @[<v 0>" ;
   List.iter iter_node cfg.cfg_nodes ;
   Format.printf "@]"

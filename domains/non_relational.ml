@@ -13,6 +13,8 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
     IMap.of_list (List.map (fun v -> v.var_id, D.const Z.zero) V.support)
   let bottom = IMap.of_list (List.map (fun v -> v.var_id, D.bottom) V.support)
 
+  let top = IMap.of_list (List.map (fun v -> v.var_id, D.top) V.support)
+
   let rec eval env e =
     let v, m = match e with
       | CFG_int_unary (op, e) ->
@@ -103,5 +105,24 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
       in
       meet env (meet (bwd_expr r e) (bwd_expr r' e'))
 
-  let pp _ _ = ()
+  let is_bottom = (=) bottom
+
+  let widen = IMap.merge (fun _ o o' -> match o, o' with
+      | None, o | o, None -> o
+      | Some v, Some v' -> Some (D.widen v v'))
+
+  let narrow m m' = try
+      IMap.merge (fun _ o o' -> match o, o' with
+          | None, o | o, None -> o
+          | Some v, Some v' -> let v'' = D.narrow v v' in
+            if D.is_bottom v'' then raise Bottom else Some v'') m m'
+    with
+    | Bottom -> bottom
+
+  let leq m m' = IMap.for_all (fun var v -> D.leq v (IMap.find var m')) m
+
+  let pp fmt m =
+    Format.fprintf fmt "@[";
+    IMap.iter (fun k v -> Format.fprintf fmt "%d: %a;@ " k D.pp v) m;
+    Format.fprintf fmt "@]"
 end
