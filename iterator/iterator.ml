@@ -53,7 +53,6 @@ module Iterator (D : Domain.DOMAIN) = struct
           | CFG_skip _ -> v
           | CFG_assign (var, e) -> D.assign v var e
           | CFG_guard e ->
-            Format.printf "guard %d: %a, %a\n" hd.node_id D.pp v D.pp (D.guard v e);
             D.guard v e
           | CFG_assert (e, _) ->
             D.guard v e
@@ -88,7 +87,8 @@ module Iterator (D : Domain.DOMAIN) = struct
     in
     let rec search_main = function
       | [] -> failwith "file has no main function"
-      | {func_name; func_entry; _} :: _ when String.starts_with ~prefix:"main" func_name ->
+      | {func_name; func_entry; _} :: _ when
+          String.starts_with ~prefix:"main" func_name ->
         let m = NodeMap.add func_entry (NodeMap.find cfg.cfg_init_exit m) m in
         loop m (out_nodes func_entry)
       | _ :: tl -> search_main tl
@@ -109,7 +109,8 @@ let iterate cfg =
     | _ -> ()
   in
   List.iter check_assertation cfg.cfg_arcs;
-  let iter_node node : unit = Format.printf "<%i>: %a@ " node.node_id D.pp (NodeMap.find node map) in
+  let iter_node node : unit =
+    Format.printf "<%i>: %a@ " node.node_id D.pp (NodeMap.find node map) in
   Format.printf "Node Values:@   @[<v 0>" ;
   List.iter iter_node cfg.cfg_nodes ;
   Format.printf "@]"

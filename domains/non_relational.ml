@@ -38,7 +38,10 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
 
   let assign env {var_id; _} e =
     let v, _ = eval env e in
-    IMap.add var_id v env
+    if v = D.bottom then
+      bottom
+    else
+      IMap.add var_id v env
 
   exception Bottom
 

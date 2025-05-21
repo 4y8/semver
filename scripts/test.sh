@@ -84,7 +84,7 @@ end_file() {
 get_nth_line() {
   line=$1
   file=$2
-  gsed "${line}q;d" $file
+  sed "${line}q;d" $file
 }
 
 treat_file() {
@@ -125,7 +125,7 @@ treat_file() {
   # we search for it in failures
   for nb in `seq 1 $nb_expected`;
   do
-    cmd="echo \"${expected}\" | ghead -${nb} | tail -1"
+    cmd="echo \"${expected}\" | head -${nb} | tail -1"
     line_nb=$(eval "${cmd}")
     echo "${failures}" | grep -q "^${line_nb}$"
     found=$?
@@ -151,7 +151,7 @@ treat_file() {
   # we search for it in expected
   for nb in `seq 1 $nb_failures`;
   do
-    cmd="echo \"${failures}\" | ghead -${nb} | tail -1"
+    cmd="echo \"${failures}\" | head -${nb} | tail -1"
     line_nb=$(eval "${cmd}")
     echo "${expected}" | grep -q "^${line_nb}$"
     found=$?
@@ -161,7 +161,7 @@ treat_file() {
       completness=$((completness+1))
       compl_loc=$((compl_loc+1))
       col_compl="blue"
-      line=$(grep "${patt_assert}" $log | ghead -${nb} | tail -1)
+      line=$(grep "${patt_assert}" $log | head -${nb} | tail -1)
 
       if [ "$need_new_line" = true ]
       then
@@ -221,7 +221,7 @@ treat_examples() {
 
     echo -ne "\r\t$file $option $fill"
 
-    opt_replaced=$(echo "${options}" | gsed "s/ /_/g")
+    opt_replaced=$(echo "${options}" | sed "s/ /_/g")
     log="${result_folder}/${filename}.${opt_replaced}.txt"
     echo "<h2><a href=\"../${log}\">${analyzer} ${options}</a></h2>" >> $file_html
     timeout $max_time $analyzer $options $file > $log 2>&1

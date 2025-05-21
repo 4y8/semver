@@ -15,34 +15,6 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
   let const z = Fin (z, z)
   let fin (n, n') = if n <<= n' then Fin (n, n') else Bot
   let rand a b = fin (a, b)
-  let unary v = function
-    | AST_UNARY_PLUS -> v
-    | AST_UNARY_MINUS ->
-      match v with
-      | Fin (a, b) -> Fin (Z.neg b, Z.neg a)
-      | MInf a -> PInf (Z.neg a)
-      | PInf a -> MInf (Z.neg a)
-      | Top -> Top
-      | Bot -> Bot
-    
-  let plus n n' = match n, n' with
-    | Top, _ | _, Top -> Top
-    | Fin (a, b), Fin (a', b') -> Fin (Z.add a a', Z.add b b')
-    | MInf _, PInf _ | PInf _, MInf _ -> Top
-    | MInf n, MInf n'
-    | MInf n, Fin (_, n')
-    | Fin (_, n'), MInf n -> MInf (Z.add n n')
-    | PInf n, PInf n'
-    | PInf n, Fin (_, n')
-    | Fin (_, n'), PInf n -> PInf (Z.add n n')
-    | Bot, _ | _, Bot -> Bot
-
-  let minus n n' = plus n (unary n' AST_UNARY_MINUS)
-
-  let binary n n' = function
-    | AST_PLUS -> plus n n'
-    | AST_MINUS -> minus n n'
-    | _ -> failwith "todo binary"
 
   let join n n' = match n, n' with
     | Top, _ | _, Top -> Top
@@ -68,6 +40,117 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
     | MInf n, MInf n' -> MInf Z.(min n n')
     | PInf n, PInf n' -> PInf Z.(max n n')
     | Bot, _ | _, Bot -> Bot
+
+  let unary v = function
+    | AST_UNARY_PLUS -> v
+    | AST_UNARY_MINUS ->
+      match v with
+      | Fin (a, b) -> Fin (Z.neg b, Z.neg a)
+      | MInf a -> PInf (Z.neg a)
+      | PInf a -> MInf (Z.neg a)
+      | Top -> Top
+      | Bot -> Bot
+
+  let plus n n' = match n, n' with
+    | Top, _ | _, Top -> Top
+    | Fin (a, b), Fin (a', b') -> Fin (Z.add a a', Z.add b b')
+    | MInf _, PInf _ | PInf _, MInf _ -> Top
+    | MInf n, MInf n'
+    | MInf n, Fin (_, n')
+    | Fin (_, n'), MInf n -> MInf (Z.add n n')
+    | PInf n, PInf n'
+    | PInf n, Fin (_, n')
+    | Fin (_, n'), PInf n -> PInf (Z.add n n')
+    | Bot, _ | _, Bot -> Bot
+
+  let minus n n' = plus n (unary n' AST_UNARY_MINUS)
+
+  let rec mult n n' = match n, n' with
+    | Bot, _ | _, Bot -> Bot
+    | Top, n | n, Top ->
+      if n = const Z.zero then const Z.zero else Top
+    | MInf _, PInf _ | PInf _, MInf _ -> Top
+    | MInf n, Fin (a, b)
+    | Fin (a, b), MInf n ->
+      mult (Fin (Z.neg b, Z.neg a)) (PInf (Z.neg n))
+    | Fin (a, b), Fin (c, d) ->
+      let p1 = Z.mul a c in
+      let p2 = Z.mul a d in
+      let p3 = Z.mul b c in
+      let p4 = Z.mul b d in
+      Fin (Z.(min (min p1 p2) (min p3 p4)), Z.(max (max p1 p2) (max p3 p4)))
+    | PInf n, Fin (a, b)
+    | Fin (a, b), PInf n ->
+      if a = Z.zero && b = Z.zero then
+        const Z.zero
+      else if b << Z.zero then
+        MInf (Z.(max (mul a n) (mul b n)))
+      else if a << Z.zero then
+        Top
+      else
+        PInf (Z.(min (mul a n) (mul b n)))
+    | MInf n, MInf n' -> mult (PInf (Z.neg n)) (PInf (Z.neg n'))
+    | PInf n, PInf n' ->
+      if Z.zero << n && Z.zero << n' then
+        PInf (Z.mul n n')
+      else Top
+
+  let rec div n n' =
+    if n = const Z.zero then Bot
+    else match n, n' with
+      | Bot, _ | _, Bot -> Bot
+      | Top, n ->
+        Top
+      | MInf n, Fin (a, b) ->
+        div (PInf (Z.neg n)) (Fin (Z.neg b, Z.neg a))
+      | PInf c, Fin (a, b) ->
+        if Z.zero << a then
+          PInf (Z.(min (div c a) (div c b)))
+        else if b << Z.zero then
+          MInf (Z.(max (div c a) (div c b)))
+        else
+          join (div n (meet n' (PInf Z.one)))
+            (div n (meet n' (MInf Z.minus_one)))
+      | PInf a, MInf b ->
+        if Z.zero << b then Top
+        else MInf Z.zero
+      | MInf a, PInf b ->
+        div (PInf (Z.neg a)) (MInf (Z.neg b))
+      | Fin (a, b), Top ->
+        let m = Z.(max (abs a) (abs b)) in
+        Fin (Z.neg m, m)
+      | MInf _, Top
+      | PInf _, Top -> Top
+      | MInf a, MInf b ->
+        div (PInf (Z.neg a)) (PInf (Z.neg b))
+      | PInf a, PInf b ->
+        if b << Z.zero then Top
+        else
+          PInf Z.zero
+      | Fin (a, b), Fin (c, d) ->
+        if Z.zero << c then
+          Fin (Z.(min (div a c) (div a d)), Z.(max (div b c) (div b d)))
+        else if d << Z.zero then
+          Fin (Z.(min (div b c) (div b d)), Z.(max (div a c) (div a d)))
+        else
+          join (div n (meet n' (PInf Z.one)))
+            (div n (meet n' (MInf Z.minus_one)))
+      | Fin (a, b), MInf c ->
+        if c << Z.zero then
+          Fin (Z.(min zero (div b c)), Z.(max zero (div a c)))
+        else
+          join (div n (meet n' (PInf Z.one)))
+            (div n (meet n' (MInf Z.minus_one)))
+      | Fin (a, b), PInf c ->
+        unary (div n (MInf (Z.neg c))) AST_UNARY_MINUS
+
+
+  let binary n n' = function
+    | AST_PLUS -> plus n n'
+    | AST_MINUS -> minus n n'
+    | AST_MULTIPLY -> mult n n'
+    | AST_DIVIDE -> div n n'
+    | _ -> failwith "todo binary"
 
   let rec compare n n' = function
     | AST_EQUAL -> let e = meet n n' in e, e
