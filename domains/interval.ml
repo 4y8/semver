@@ -77,11 +77,13 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
         | Fin (a, b), Fin (c, d) when a = b && b = c && c = d -> Bot, Bot
         | n, n' -> n, n'
       end
-    | AST_GREATER_EQUAL
     | AST_GREATER ->
       let n', n = compare n' n AST_LESS in
       n, n'
-    | AST_LESS | AST_LESS_EQUAL ->
+    | AST_GREATER_EQUAL ->
+      let n', n = compare n' n AST_LESS_EQUAL in
+      n, n'
+    | AST_LESS_EQUAL ->
       let l = match n' with
         | Bot -> Bot
         | PInf _
@@ -95,8 +97,20 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
         | PInf a | Fin (a, _) -> PInf a
       in
       meet l n, meet r n'
+    | AST_LESS ->
+      let l = match n' with
+        | Bot -> Bot
+        | PInf _ | Top -> Top
+        | MInf a | Fin (_, a) -> MInf (Z.add Z.minus_one a)
+      in
+      let r = match n with
+        | Bot -> Bot
+        | MInf _ | Top -> Top
+        | PInf a | Fin (a, _) -> PInf (Z.add Z.one a)
+      in
+      meet l n, meet r n'
 
-  let bwd_unary v op r = 
+  let bwd_unary v op r =
     meet v (unary r op)
 
   let bwd_binary x y op r = match op with
