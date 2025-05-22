@@ -95,8 +95,7 @@ module Iterator (D : Domain.DOMAIN) = struct
     in search_main cfg.cfg_funcs
 end
 
-let iterate cfg =
-  let module D = Domains.Non_relational.NonRelational(struct let support = cfg.cfg_vars end)(Domains.Interval.Interval) in
+let iterate cfg (module D : Domains.Domain.DOMAIN) =
   let module I = Iterator(D) in
   let map = I.iter cfg in
   let _ = Random.self_init () in

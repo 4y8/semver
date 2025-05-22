@@ -144,5 +144,4 @@ module Constant : ValueDomain.VALUE_DOMAIN = struct
           then Cst a, Cst b
           else Bot, Bot
       end
-
 end
