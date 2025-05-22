@@ -1,8 +1,6 @@
 open Frontend
 open AbstractSyntax
 
-module ISet = Set.Make(Z)
-
 let (<<=) n n' = Z.compare n n' <= 0
 let (<<) n n' = Z.compare n n' < 0
 
@@ -10,8 +8,6 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
   type t = Top | MInf of Z.t | PInf of Z.t | Fin of Z.t * Z.t | Bot
   let top = Top
   let bottom = Bot
-  let abs s =
-    Fin (ISet.min_elt s, ISet.max_elt s)
   let const z = Fin (z, z)
   let fin (n, n') = if n <<= n' then Fin (n, n') else Bot
   let rand a b = fin (a, b)
@@ -40,6 +36,36 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
     | MInf n, MInf n' -> MInf Z.(min n n')
     | PInf n, PInf n' -> PInf Z.(max n n')
     | Bot, _ | _, Bot -> Bot
+
+  let leq i i' = match i, i' with
+    | _, Top | Bot, _ -> true
+    | _, Bot | Top, _ -> i = i'
+    | Fin (_, n), MInf n'
+    | MInf n, MInf n' -> Z.compare n n' <= 0
+    | Fin (n, _), PInf n'
+    | PInf n, PInf n' -> Z.compare n n' >= 0
+    | MInf _, PInf _ | PInf _, MInf _
+    | MInf _, Fin (_, _) | PInf _, Fin (_, _) -> false
+    | Fin (a, b), Fin (a', b') ->
+      Z.compare a a' >= 0 && Z.compare b b' <= 0
+
+  let abs_val = function
+    | Fin (a, b) ->
+      let m = Z.(max (abs a) (abs b)) in
+      Fin (Z.neg m, m)
+    | Bot -> Bot
+    | MInf _ | PInf _ | Top -> Top
+
+  let sign = function
+    | Bot -> Bot
+    | Top -> Top
+    | Fin (a, b) when b <<= Z.zero -> MInf Z.zero
+    | Fin (a, b) when Z.zero <<= a -> PInf Z.zero
+    | Fin (_, _) -> Top
+    | PInf n when n << Z.zero -> Top
+    | MInf n when Z.zero << n -> Top
+    | PInf _ -> PInf Z.zero
+    | MInf _ -> MInf Z.zero
 
   let unary v = function
     | AST_UNARY_PLUS -> v
@@ -78,7 +104,7 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
       let p2 = Z.mul a d in
       let p3 = Z.mul b c in
       let p4 = Z.mul b d in
-      Fin (Z.(min (min p1 p2) (min p3 p4)), Z.(max (max p1 p2) (max p3 p4)))
+      fin (Z.(min (min p1 p2) (min p3 p4)), Z.(max (max p1 p2) (max p3 p4)))
     | PInf n, Fin (a, b)
     | Fin (a, b), PInf n ->
       if a = Z.zero && b = Z.zero then
@@ -96,7 +122,7 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
       else Top
 
   let rec div n n' =
-    if n = const Z.zero then Bot
+    if n' = const Z.zero then Bot
     else match n, n' with
       | Bot, _ | _, Bot -> Bot
       | Top, n ->
@@ -118,7 +144,7 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
         div (PInf (Z.neg a)) (MInf (Z.neg b))
       | Fin (a, b), Top ->
         let m = Z.(max (abs a) (abs b)) in
-        Fin (Z.neg m, m)
+        fin (Z.neg m, m)
       | MInf _, Top
       | PInf _, Top -> Top
       | MInf a, MInf b ->
@@ -129,28 +155,31 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
           PInf Z.zero
       | Fin (a, b), Fin (c, d) ->
         if Z.zero << c then
-          Fin (Z.(min (div a c) (div a d)), Z.(max (div b c) (div b d)))
+          fin (Z.(min (div a c) (div a d)), Z.(max (div b c) (div b d)))
         else if d << Z.zero then
-          Fin (Z.(min (div b c) (div b d)), Z.(max (div a c) (div a d)))
+          fin (Z.(min (div b c) (div b d)), Z.(max (div a c) (div a d)))
         else
           join (div n (meet n' (PInf Z.one)))
             (div n (meet n' (MInf Z.minus_one)))
       | Fin (a, b), MInf c ->
         if c << Z.zero then
-          Fin (Z.(min zero (div b c)), Z.(max zero (div a c)))
+          fin (Z.(min zero (div b c)), Z.(max zero (div a c)))
         else
           join (div n (meet n' (PInf Z.one)))
             (div n (meet n' (MInf Z.minus_one)))
       | Fin (a, b), PInf c ->
         unary (div n (MInf (Z.neg c))) AST_UNARY_MINUS
 
+  let modulo n n' = 
+    meet (meet (minus n (mult n' (div n n'))) (abs_val n'))
+      (meet (sign n) (abs_val n'))
 
   let binary n n' = function
     | AST_PLUS -> plus n n'
     | AST_MINUS -> minus n n'
     | AST_MULTIPLY -> mult n n'
     | AST_DIVIDE -> div n n'
-    | _ -> failwith "todo binary"
+    | AST_MODULO -> modulo n n'
 
   let rec compare n n' = function
     | AST_EQUAL -> let e = meet n n' in e, e
@@ -199,19 +228,19 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
   let bwd_binary x y op r = match op with
     | AST_PLUS -> meet x (binary r y AST_MINUS), meet y (binary r x AST_MINUS)
     | AST_MINUS -> meet x (binary r y AST_PLUS), meet y (binary r x AST_PLUS)
-    | _ -> failwith "todo bwd_binary"
-
-  let leq i i' = match i, i' with
-    | _, Top | Bot, _ -> true
-    | _, Bot | Top, _ -> i = i'
-    | Fin (_, n), MInf n'
-    | MInf n, MInf n' -> Z.compare n n' <= 0
-    | Fin (n, _), PInf n'
-    | PInf n, PInf n' -> Z.compare n n' >= 0
-    | MInf _, PInf _ | PInf _, MInf _
-    | MInf _, Fin (_, _) | PInf _, Fin (_, _) -> false
-    | Fin (a, b), Fin (a', b') ->
-      Z.compare a a' >= 0 && Z.compare b b' <= 0
+    | AST_MULTIPLY ->
+      let x' = if y = const Z.zero && leq (const Z.zero) r then x else
+          meet x (binary r y AST_DIVIDE)
+      in let y' = if x = const Z.zero && leq (const Z.zero) r then y else
+             meet y (binary r x AST_DIVIDE)
+      in x', y'
+    | AST_DIVIDE ->
+      if y = const Z.zero then Bot, Bot else
+        (* on prend en compte les arrondis *)
+        let r = binary r (rand Z.minus_one Z.one) AST_PLUS in
+        meet x (binary r y AST_MULTIPLY), meet y (binary x r AST_DIVIDE)
+    | AST_MODULO ->
+      meet x (sign r), y
 
   let widen i i' = match i, i' with
     | Bot, i | i, Bot -> i
