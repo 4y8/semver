@@ -170,7 +170,7 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
       | Fin (a, b), PInf c ->
         unary (div n (MInf (Z.neg c))) AST_UNARY_MINUS
 
-  let modulo n n' = 
+  let modulo n n' =
     meet (meet (minus n (mult n' (div n n'))) (abs_val n'))
       (meet (sign n) (abs_val n'))
 
@@ -229,9 +229,9 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
     | AST_PLUS -> meet x (binary r y AST_MINUS), meet y (binary r x AST_MINUS)
     | AST_MINUS -> meet x (binary r y AST_PLUS), meet y (binary r x AST_PLUS)
     | AST_MULTIPLY ->
-      let x' = if y = const Z.zero && leq (const Z.zero) r then x else
+      let x' = if leq (const Z.zero) y && leq (const Z.zero) r then x else
           meet x (binary r y AST_DIVIDE)
-      in let y' = if x = const Z.zero && leq (const Z.zero) r then y else
+      in let y' = if leq (const Z.zero) x && leq (const Z.zero) r then y else
              meet y (binary r x AST_DIVIDE)
       in x', y'
     | AST_DIVIDE ->

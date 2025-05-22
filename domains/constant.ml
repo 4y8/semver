@@ -30,16 +30,23 @@ module Constant : ValueDomain.VALUE_DOMAIN = struct
       | v -> v
     else v
 
-  let binary v v' op = match v, v' with
-    | Top, _ | _, Top -> Top
-    | Bot, _ | _, Bot -> Bot
-    | Cst n, Cst n' ->
-      match op with
-      | AST_PLUS -> Cst Z.(add n n')
-      | AST_MINUS -> Cst Z.(sub n n')
-      | AST_MULTIPLY -> Cst Z.(mul n n')
-      | AST_DIVIDE -> Cst Z.(div n n')
-      | AST_MODULO -> Cst Z.(rem n n')
+  let binary v v' op =
+    if (op = AST_MULTIPLY && (v = Cst Z.zero || v' = Cst Z.zero)) ||
+       (op = AST_DIVIDE && v = Cst Z.zero)
+    then Cst Z.zero
+    else if op = AST_DIVIDE && v' = Cst Z.zero
+    then Bot
+    else
+      match v, v' with
+      | Top, _ | _, Top -> Top
+      | Bot, _ | _, Bot -> Bot
+      | Cst n, Cst n' ->
+        match op with
+        | AST_PLUS -> Cst Z.(add n n')
+        | AST_MINUS -> Cst Z.(sub n n')
+        | AST_MULTIPLY -> Cst Z.(mul n n')
+        | AST_DIVIDE -> Cst Z.(div n n')
+        | AST_MODULO -> Cst Z.(rem n n')
 
   let meet v v' = match v, v' with
     | Top, v | v, Top -> v
@@ -102,9 +109,9 @@ module Constant : ValueDomain.VALUE_DOMAIN = struct
     | AST_PLUS -> meet x (binary r y AST_MINUS), meet y (binary r x AST_MINUS)
     | AST_MINUS -> meet x (binary r y AST_PLUS), meet y (binary r x AST_PLUS)
     | AST_MULTIPLY ->
-      let x' = if y = const Z.zero && leq (const Z.zero) r then x else
+      let x' = if leq (const Z.zero) y && leq (const Z.zero) r then x else
           meet x (binary r y AST_DIVIDE)
-      in let y' = if x = const Z.zero && leq (const Z.zero) r then y else
+      in let y' = if leq (const Z.zero) x && leq (const Z.zero) r then y else
              meet y (binary r x AST_DIVIDE)
       in x', y'
     | AST_DIVIDE ->

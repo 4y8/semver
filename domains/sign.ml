@@ -135,9 +135,9 @@ module Signs : ValueDomain.VALUE_DOMAIN = struct
     | AST_PLUS -> meet x (binary r y AST_MINUS), meet y (binary r x AST_MINUS)
     | AST_MINUS -> meet x (binary r y AST_PLUS), meet y (binary r x AST_PLUS)
     | AST_MULTIPLY ->
-      let x' = if y = const Z.zero && r.zero then x else
+      let x' = if y.zero && r.zero then x else
           meet x (binary r y AST_DIVIDE)
-      in let y' = if x = const Z.zero && r.zero then y else
+      in let y' = if x.zero && r.zero then y else
              meet y (binary r x AST_DIVIDE)
       in x', y'
     | AST_DIVIDE ->
