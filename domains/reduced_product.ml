@@ -14,6 +14,9 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
   let const n =
     S.const n, C.const n, I.const n
 
+  let rand a b =
+    S.rand a b, C.rand a b, I.rand a b
+
   let rho_step (Sign.{pos ; neg ; zero}, c, i) =
     match c with
     | Congruence.Bot -> bottom
@@ -103,4 +106,57 @@ module Interval : ValueDomain.VALUE_DOMAIN = struct
       v'
     else
       rho v'
+
+  let apply_op_then_rho fs fc fi =
+    fun (s, c, i) (s', c', i') ->
+    rho (fs s s', fc c c', fi i i')
+
+  let apply_op_then_rho2 fs fc fi =
+    fun (s, c, i) (s', c', i') ->
+    let s, s' = fs s s' in
+    let c, c' = fc c c' in
+    let i, i' = fi i i' in
+    rho (s, c, i), rho (s', c', i')
+
+  let join =
+    apply_op_then_rho S.join C.join I.join
+
+  let meet =
+    apply_op_then_rho S.meet C.meet I.meet
+
+  let widen (s, c, i) (s', c', i') =
+    (S.widen s s', C.widen c c', I.widen i i')
+
+  let narrow (s, c, i) (s', c', i') =
+    (S.narrow s s', C.narrow c c', I.narrow i i')
+
+  let unary (s, c, i) op =
+    rho (S.unary s op, C.unary c op, I.unary i op)
+
+  let binary v v' op =
+    let app_op_end f x y = f x y op in
+    apply_op_then_rho (app_op_end S.binary) (app_op_end C.binary)
+      (app_op_end I.binary) v v'
+
+  let compare v v' op =
+    let app_op_end f x y = f x y op in
+    apply_op_then_rho2 (app_op_end S.compare) (app_op_end C.compare)
+      (app_op_end I.compare) v v'
+
+  let bwd_unary x op r =
+    let app_op_mid f x y = f x op y in
+    apply_op_then_rho (app_op_mid S.bwd_unary) (app_op_mid C.bwd_unary)
+      (app_op_mid I.bwd_unary) x r
+
+  let bwd_binary x y op (rs, rc, ri) =
+    apply_op_then_rho2 (fun x y -> S.bwd_binary x y op rs)
+      (fun x y -> C.bwd_binary x y op rc)
+      (fun x y -> I.bwd_binary x y op ri) x y
+
+  let is_bottom v =
+    let s, c, i = rho v in
+    S.is_bottom s && C.is_bottom c && I.is_bottom i
+
+  let leq (s, c, i) (s', c', i') =
+    S.leq s s' && C.leq c c' && I.leq i i'
 end
