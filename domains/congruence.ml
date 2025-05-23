@@ -1,9 +1,9 @@
 open Frontend
 open AbstractSyntax
+type cong = Bot | Cong of Z.t * Z.t
 
-
-module Congruence : ValueDomain.VALUE_DOMAIN = struct
-  type t = Bot | Cong of Z.t * Z.t
+module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
+  type t = cong
 
   let bottom = Bot
   let top = Cong (Z.one, Z.zero)
@@ -32,7 +32,7 @@ module Congruence : ValueDomain.VALUE_DOMAIN = struct
       Cong (Z.(gcd (gcd a a') (abs (b - b'))), b)
 
   let widen = join
-  let narrow = meet
+  let narrow v v' = v (* pas optimal mais on n'utilise pas de resserrement *)
 
   let pp fmt = function
     | Bot -> Format.fprintf fmt "⊥"
@@ -104,11 +104,19 @@ module Congruence : ValueDomain.VALUE_DOMAIN = struct
         in x', y'
       | AST_DIVIDE ->
         if a' = Z.zero && b' = Z.zero then Bot, Bot else
-          x, y
+          begin match r with
+            | Bot -> Bot, Bot
+            | Cong (_, _) -> x, y
+          end
       | AST_MODULO ->
         if a' = Z.zero && b' = Z.zero then Bot, Bot else
-          x, y
-
+          match r with
+          | Bot -> Bot, Bot
+          | Cong (c, d) ->
+            if c = Z.zero && a' = Z.zero then
+              meet x (Cong (b', d)), y
+            else
+              x, y
 
   let is_bottom = (=) Bot
 end

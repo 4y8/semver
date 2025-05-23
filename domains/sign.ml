@@ -1,9 +1,10 @@
 open Frontend
 open AbstractSyntax
 
+type sign = { zero : bool ; pos : bool ; neg : bool }
 
-module Signs : ValueDomain.VALUE_DOMAIN = struct
-  type t = { zero : bool ; pos : bool ; neg : bool }
+module Signs : (ValueDomain.VALUE_DOMAIN with type t = sign) = struct
+  type t = sign
 
   let pp fmt = function
     | { zero = false ; pos = false ; neg = false } -> Format.fprintf fmt "⊥"

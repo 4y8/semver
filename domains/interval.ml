@@ -4,8 +4,10 @@ open AbstractSyntax
 let (<<=) n n' = Z.compare n n' <= 0
 let (<<) n n' = Z.compare n n' < 0
 
-module Interval : ValueDomain.VALUE_DOMAIN = struct
-  type t = Top | MInf of Z.t | PInf of Z.t | Fin of Z.t * Z.t | Bot
+type inter = Top | MInf of Z.t | PInf of Z.t | Fin of Z.t * Z.t | Bot
+
+module Interval : (ValueDomain.VALUE_DOMAIN with type t = inter) = struct
+  type t = inter
   let top = Top
   let bottom = Bot
   let const z = Fin (z, z)

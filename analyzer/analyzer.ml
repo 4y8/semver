@@ -20,17 +20,19 @@ let doit filename =
   if !Options.verbose then Format.printf "%a" ControlFlowGraphPrinter.print_cfg cfg ;
   ControlFlowGraphPrinter.output_dot !Options.cfg_out cfg ;
   let module D =
-    match !Options.domain with
+    (val
+    (match !Options.domain with
     | "interval" ->
-      module (Non_relational.NonRelational
+      (module (Non_relational.NonRelational
                 (struct let support = cfg.cfg_vars end)
-                (Interval.Interval))
+                (Interval.Interval)) : Domain.DOMAIN)
     | "constants" ->
-      module (Non_relational.NonRelational
+      (module (Non_relational.NonRelational
                 (struct let support = cfg.cfg_vars end)
-                (Constant.Constant))
-in
-  Iterator.iterate cfg
+                (Constant.Constant)))
+    | _ -> failwith "unknown domain"))
+  in
+  Iterator.iterate cfg (module D)
 
 (* parses arguments to get filename *)
 let main () =
