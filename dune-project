@@ -14,4 +14,5 @@
   (depends
     dune
     zarith
+    apron
     menhir))
