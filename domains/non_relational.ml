@@ -62,26 +62,6 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
          | None, v | v, None -> v
          | Some v, Some v' -> Some (D.join v v'))
 
-  let rec elim_not = function
-    | CFG_bool_rand -> CFG_bool_rand
-    | CFG_bool_const b -> CFG_bool_const (not b)
-    | CFG_bool_unary (AST_NOT, e) -> e
-    | CFG_compare (op, e, e') ->
-      let cop = match op with
-        | AST_EQUAL -> AST_NOT_EQUAL
-        | AST_NOT_EQUAL -> AST_EQUAL
-        | AST_GREATER_EQUAL -> AST_LESS
-        | AST_GREATER -> AST_LESS_EQUAL
-        | AST_LESS_EQUAL -> AST_GREATER
-        | AST_LESS -> AST_GREATER_EQUAL
-      in CFG_compare (cop, e, e')
-    | CFG_bool_binary (op, e, e') ->
-      let ne = CFG_bool_unary (AST_NOT, e) in
-      let ne' = CFG_bool_unary (AST_NOT, e') in
-      match op with
-      | AST_AND -> CFG_bool_binary (AST_OR, ne, ne')
-      | AST_OR -> CFG_bool_binary (AST_AND, ne, ne')
-
   let rec guard env = function
     | CFG_bool_const true -> env
     | CFG_bool_const false -> bottom

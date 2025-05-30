@@ -17,7 +17,8 @@ open Domains
 let doit filename =
   let prog = FileParser.parse_file filename in
   let cfg = Tree_to_cfg.prog prog in
-  if !Options.verbose then Format.printf "%a" ControlFlowGraphPrinter.print_cfg cfg ;
+  if !Options.verbose then
+    Format.printf "%a" ControlFlowGraphPrinter.print_cfg cfg ;
   ControlFlowGraphPrinter.output_dot !Options.cfg_out cfg ;
   let module D =
     (val
