@@ -31,6 +31,21 @@ let doit filename =
       (module (Non_relational.NonRelational
                 (struct let support = cfg.cfg_vars end)
                 (Constant.Constant)))
+    | "product" ->
+      (module (Non_relational.NonRelational
+                (struct let support = cfg.cfg_vars end)
+                (Reduced_product.RedProd)))
+    | "sign" ->
+      (module (Non_relational.NonRelational
+                (struct let support = cfg.cfg_vars end)
+                (Sign.Sign)))
+    | "congruence" ->
+      (module (Non_relational.NonRelational
+                (struct let support = cfg.cfg_vars end)
+                (Congruence.Congruence)))
+    | "polyhedral" ->
+      (module (Polyhedral.Polyhedral
+                (struct let support = cfg.cfg_vars end) ()))
     | _ -> failwith "unknown domain"))
   in
   Iterator.iterate cfg (module D)

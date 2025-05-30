@@ -1,7 +1,7 @@
-module Interval : ValueDomain.VALUE_DOMAIN = struct
+module RedProd : ValueDomain.VALUE_DOMAIN = struct
   type t = Sign.sign * Congruence.cong * Interval.inter
 
-  module S = Sign.Signs
+  module S = Sign.Sign
   module I = Interval.Interval
   module C = Congruence.Congruence
 

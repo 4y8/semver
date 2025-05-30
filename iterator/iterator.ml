@@ -82,6 +82,7 @@ module Iterator (D : Domain.DOMAIN) = struct
         in
         loop (NodeMap.add hd v map) tl
     in
+
     let m = loop (NodeMap.singleton cfg.cfg_init_entry D.init)
       (out_nodes cfg.cfg_init_entry)
     in
@@ -90,6 +91,7 @@ module Iterator (D : Domain.DOMAIN) = struct
       | {func_name; func_entry; _} :: _ when
           String.starts_with ~prefix:"main" func_name ->
         let m = NodeMap.add func_entry (NodeMap.find cfg.cfg_init_exit m) m in
+
         loop m (out_nodes func_entry)
       | _ :: tl -> search_main tl
     in search_main cfg.cfg_funcs
@@ -99,6 +101,7 @@ let iterate cfg (module D : Domains.Domain.DOMAIN) =
   let module I = Iterator(D) in
   let map = I.iter cfg in
   let _ = Random.self_init () in
+  print_endline "ee";
   let check_assertation {arc_inst; arc_src; _} = match arc_inst with
     | CFG_assert (e, pos) ->
       let v = NodeMap.find arc_src map in

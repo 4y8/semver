@@ -3,7 +3,7 @@ open AbstractSyntax
 open Apron
 open ControlFlowGraph
 
-module NonRelational (V : Domain.VARS) () : Domain.DOMAIN = struct
+module Polyhedral (V : Domain.VARS) () : Domain.DOMAIN = struct
   type t = Polka.loose Polka.t Abstract1.t
 
   (* we transit by strings to avoid losing precision because of machine integers
@@ -15,7 +15,7 @@ module NonRelational (V : Domain.VARS) () : Domain.DOMAIN = struct
   let manager = Polka.manager_alloc_loose ()
 
   let apron_var_of_var {var_id; _} =
-    Apron.Var.of_string @@ string_of_int var_id
+    Apron.Var.of_string @@ "x_" ^  string_of_int var_id
 
   let vars =
     List.map apron_var_of_var V.support |> Array.of_list
@@ -24,7 +24,7 @@ module NonRelational (V : Domain.VARS) () : Domain.DOMAIN = struct
     Environment.make vars [||]
 
   let init =
-    let v = Abstract1.bottom manager env in
+    let v = Abstract1.top manager env in
     let zeros =
       Array.map (fun _ -> Texpr1.(of_expr env (Cst (Coeff.s_of_int 0)))) vars in
     Abstract1.assign_texpr_array manager v vars zeros None
@@ -69,22 +69,25 @@ module NonRelational (V : Domain.VARS) () : Domain.DOMAIN = struct
       Texpr1.(Binop (Mod, expr1_of_int_expr e, expr1_of_int_expr e', Int, Zero))
 
   let guard x e =
-    let rec build_polyhedron = function
-      | CFG_bool_rand -> top
-      | CFG_bool_const true -> top
+    (* add the constraints described by an expression to acc ; we don't
+    calculate the constraints alone because, as we approximate, we don't have
+    the commutativity/associativity of meet *)
+    let rec build_polyhedron acc = function
+      | CFG_bool_rand -> acc
+      | CFG_bool_const true -> acc
       | CFG_bool_const false -> bottom
       | CFG_bool_unary (AST_NOT, e) ->
-        build_polyhedron (elim_not e)
+        build_polyhedron acc (elim_not e)
       | CFG_bool_binary (AST_AND, e, e') ->
-        meet (build_polyhedron e) (build_polyhedron e')
+        build_polyhedron (build_polyhedron acc e) e'
       | CFG_bool_binary (AST_OR, e, e') ->
-        join (build_polyhedron e) (build_polyhedron e')
+        join (build_polyhedron acc e) (build_polyhedron acc e')
       | CFG_compare (AST_LESS, e, e') ->
-        build_polyhedron (CFG_compare (AST_GREATER, e', e))
+        build_polyhedron acc (CFG_compare (AST_GREATER, e', e))
       | CFG_compare (AST_LESS_EQUAL, e, e') ->
-        build_polyhedron (CFG_compare (AST_GREATER_EQUAL, e', e))
+        build_polyhedron acc (CFG_compare (AST_GREATER_EQUAL, e', e))
       | CFG_compare (AST_NOT_EQUAL, e, e') ->
-        build_polyhedron @@
+        build_polyhedron acc @@
         CFG_bool_binary (AST_OR, CFG_compare(AST_GREATER, e, e'),
                          CFG_compare(AST_GREATER, e', e))
       | CFG_compare (AST_GREATER | AST_GREATER_EQUAL | AST_EQUAL as op, e, e') ->
@@ -94,12 +97,14 @@ module NonRelational (V : Domain.VARS) () : Domain.DOMAIN = struct
           | AST_GREATER -> Tcons1.SUP
           | AST_GREATER_EQUAL -> Tcons1.SUPEQ
           | AST_EQUAL -> Tcons1.EQ
+          | AST_NOT_EQUAL -> Tcons1.DISEQ
           | _ -> failwith "impossible"
         in
         Tcons1.array_set a 0 Tcons1.(make (Texpr1.of_expr env e) op);
-        Abstract1.of_tcons_array manager env a
+        Abstract1.meet_tcons_array manager acc a
     in
-    meet x (build_polyhedron e)
+    Format.printf "%a\n" Abstract1.print (build_polyhedron x e);
+    build_polyhedron x e
 
   let assign x v e =
     let e = Texpr1.of_expr env (expr1_of_int_expr e) in

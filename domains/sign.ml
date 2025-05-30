@@ -3,7 +3,7 @@ open AbstractSyntax
 
 type sign = { zero : bool ; pos : bool ; neg : bool }
 
-module Signs : (ValueDomain.VALUE_DOMAIN with type t = sign) = struct
+module Sign : (ValueDomain.VALUE_DOMAIN with type t = sign) = struct
   type t = sign
 
   let pp fmt = function

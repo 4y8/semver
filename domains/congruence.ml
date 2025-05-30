@@ -16,7 +16,10 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
     | Bot, _ -> true
     | _, Bot -> false
     | Cong (a, b), Cong (a', b') ->
-      Z.(rem a a' = zero && rem (b - b') a' = zero)
+      if a' = Z.zero then
+        Z.(a = zero && b = b')
+      else
+        Z.(rem a a' = zero && rem (b - b') a' = zero)
 
   let meet v v' = match v, v' with
     | Bot, _ | _, Bot -> Bot
@@ -62,8 +65,8 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
       | AST_MODULO ->
         if a' = Z.zero && b' = Z.zero
         then Bot
-        else if Z.rem a' b' = Z.zero then
-          Cong (Z.zero, Z.rem b a')
+        else if a' = Z.zero && Z.rem a b' = Z.zero then
+          Cong (b', Z.rem b b')
         else
           top
 

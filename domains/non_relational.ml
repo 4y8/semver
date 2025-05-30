@@ -74,7 +74,6 @@ module NonRelational (V : Domain.VARS) (D : ValueDomain.VALUE_DOMAIN) :
       let v', m' = eval env e' in
       let m = IEMap.merge (fun _ o o' -> if o = None then o' else o) m m' in
       let r, r' = D.compare v v' op in
-      Format.printf "%a %a %a %a\n" D.pp v D.pp v' D.pp r D.pp r';
       let rec bwd_expr r = function
         | CFG_int_const n ->
           if D.(leq (const n) r)
