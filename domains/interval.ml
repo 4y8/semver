@@ -32,9 +32,12 @@ module Interval : (ValueDomain.VALUE_DOMAIN with type t = inter) = struct
       let c = Z.max a a' in
       let d = Z.min b b' in
       fin (c, d)
-    | MInf n, PInf n' | PInf n', MInf n
-    | MInf n, Fin (n', _) | Fin (n', _), MInf n
-    | PInf n', Fin (_, n) | Fin (_, n), PInf n'-> fin (n', n)
+    | MInf n, PInf n' | PInf n', MInf n ->
+      fin (n', n)
+    | MInf n, Fin (n', n'') | Fin (n', n''), MInf n ->
+      fin (n', Z.min n n'')
+    | PInf n', Fin (n'', n) | Fin (n'', n), PInf n'->
+      fin (Z.max n' n'', n)
     | MInf n, MInf n' -> MInf Z.(min n n')
     | PInf n, PInf n' -> PInf Z.(max n n')
     | Bot, _ | _, Bot -> Bot

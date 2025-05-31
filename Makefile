@@ -21,6 +21,9 @@ test: cleantest all
 doc: all
 	@dune build @doc-private
 
+rapport: rapport.tex
+	latexmk -pdf rapport.tex
+
 compress: clean
-	@tar -czvf ../project-semantics.tar.gz --exclude=".git*" ../project-semantics
-	@mv ../project-semantics.tar.gz .
+	@tar -czvf ../boussaa.tgz --exclude=".git*" $(shell pwd)
+	@mv ../boussaa.tgz .

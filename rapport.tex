@@ -1,0 +1,124 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper, left=1.2in, right=1.2in, top=1.4in, bottom=1.5in]{geometry}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+
+\author{Aghilas Y. Boussaa \texttt{<aghilas.boussaa@ens.fr>}}
+\title{Report for the project of Semantics and Application to Program Verification}
+\begin{document}
+\maketitle
+\begin{abstract}
+  We present our project for the course \textit{Semantics and Application to
+    Program Verification}. We have implemented an iterator supporting backward
+  analysis and all the requiered domains. We added examples to test these.
+\end{abstract}
+\section{Global architecture}
+The iterator starts by a depth first exploration of the forest of nodes to mark
+nodes that will require widening to ensure termination.
+
+As suggested by the handle, the iterator then implements a worklist algorithm.
+
+Once a final value has been calculated for each node, each assertion is checked.
+If an assertion fails (i.e. the environment where it is false isn't bottom)
+while the \texttt{---backward} option has beeen set. The iterator launches a
+backward analyses from the source of the assertion arc assuming the assertion
+failed. The assertion of figure~\ref{backward} triggers an error with interval
+domain if we don't use backward analysis.
+\begin{figure}[h]
+\begin{verbatim}
+void main () {
+        int i = rand(1, 2);
+        int j = i * 2;
+        if (j >= 3) {
+                assert(i > 1); //@OK
+        }
+}
+\end{verbatim}
+\caption{No error triggered with \texttt{---backward}}\label{backward}
+\end{figure}
+\section{Domains}
+\subsection{Interval}
+An interval is represented, either as $\bot$, $\top$, $[a;+\infty[$, $[a;b]$
+    (with $a\leq b$) or $]-\infty;b]$, where $a$ and $b$ are integers. This
+forces us to consider a lot of sometimes redundant cases when writing our
+functions and may not be the best way to implement it. It, at least, forces us
+to truly consider edge cases.
+
+All the operation, except for the modulo, are implemented as in the course. To
+implement the modulo, we take into account the fact that, in \textsf{C},
+\texttt{a\%b} has the sign of \texttt{a} and is smaller, in absolute value, than
+\texttt{b}.
+\subsection{Sign}
+To represent a sign, we take three booleans: can the value be negative, can it
+be null and can it be positive. This makes most operations straightforward to
+implement (a join is logical or, a meet a logical and, etc.).
+
+Once again, all the operation apart from the modulo are standard. The remark
+from the previous subsection gives us that the sign of \texttt{a\%b} with zero
+bit set to true. This domain allows us to treat correctly programs such as the
+one in figure~\ref{sign} which can't be handled with intervals.
+\begin{figure}[h]
+\begin{verbatim}
+void main () {
+        int i = rand(1, 100);
+        int j = rand(-100, -1);
+        assert(i * j != 0); // @OK
+}
+\end{verbatim}
+\caption{A use case for the sign domain}\label{sign}
+\end{figure}
+\subsection{Congruence}
+We reprensent a value of the congruence domain by either $\bot$ or two integers
+representing the set $a\mathbb{Z}+b$.
+
+Most operations are straightforward implementation of the ideas of Antoine
+Miné's course notes\footnote{their was a mistake in the description of the meet,
+we sent an e-mail to the author and it was corrected in the last version}. They
+are exercises in arithmetic we don't detail here. For the modulo, we treat
+precisely the case where we divide by a constant.
+
+For widening, the join will suffice, as the factor before (which is a positive
+integer) the $\mathbb{Z}$ decreases each time we make a join, and the constant
+is the one join's first argument. We don't have a precise implementation of
+narrowing. It is harmless as we don't use it in our iterator.
+\subsection{Reduced product of the previous ones}
+A value of this domain is a tuple of three values, one for each domain.
+
+Once the reduction function has been implemented, all the operations on the
+reduced product can be derived from the operations on the factors.
+
+For the reduction, we start by updating the sign with informations from the two
+other domains. We, then, update the interval taking into the sign and finally
+the interval and the congruence. As the last modification on the interval can
+bring new sign information, we iterate this process until we have a
+fixpoint\footnote{we will have one, as, once the sign is fixed (decreasing in a
+finite domain), we only have the interaction of the interval and congruence; we
+conjecture that we only need two iterations as once the sign is updated for the
+second time, the rest won't change}.
+\subsection{Polyhedral}
+Most operations on the polyhderal domain have their direct counterpart in the
+\textsf{Apron} library and the only thing to do is providing the good arguments.
+
+The notable exception to this is the \texttt{guard} function, which isn't mapped
+directly to an \textsf{Apron} function. To implement it, we take the meet of the
+environment given in arguments and several polyhedron representing the
+constraints given by the boolean expression. We build this meet little by
+little, instead of building one polyhedron and taking the meet at the end to
+treat the example of figure~\ref{poly}. If we just build a polyhedron for
+\texttt{i+j!=0}, we get $\top$ and the analyzer triggers an error, while
+it doesn't with our design.
+\begin{figure}[h]
+\begin{verbatim}
+void main () {
+        int i = rand(1, 10);
+        int j = -i;
+        assert(i + j == 0); //@OK
+}
+\end{verbatim}
+\caption{On the necessity of being cautious with guard}\label{poly}
+\end{figure}
+\end{document}

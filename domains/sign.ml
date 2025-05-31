@@ -111,7 +111,8 @@ module Sign : (ValueDomain.VALUE_DOMAIN with type t = sign) = struct
            else if v = bottom then bottom
            else meet { v with pos = true } v'
       in x, y
-    | AST_GREATER -> let x, y = compare v' v AST_GREATER in y, x
+    | AST_GREATER ->
+      let x, y = compare v' v AST_LESS in y, x
     | AST_LESS ->
       let x = match v' with
         | { pos = true ; _} -> v
@@ -120,7 +121,7 @@ module Sign : (ValueDomain.VALUE_DOMAIN with type t = sign) = struct
         | { zero = false ; neg = false ; pos = false } ->
           bottom
         | v' -> meet v { v' with neg = true }
-      in let y = match v' with
+      in let y = match v with
         | { neg = true ; _} -> v'
         | { zero = true ; neg = false ; pos = false } ->
           meet v' { zero = false ; neg = false ; pos = true }
@@ -145,5 +146,9 @@ module Sign : (ValueDomain.VALUE_DOMAIN with type t = sign) = struct
       if y = const Z.zero then bottom, bottom else
         meet x (binary r y AST_MULTIPLY), meet y (binary x r AST_DIVIDE)
     | AST_MODULO ->
-      meet x r, y
+      if r = { neg = true ; pos = false ; zero = false } ||
+         r = { neg = false ; pos = true ; zero = false } then
+        meet x r, y
+      else
+        x, y
 end

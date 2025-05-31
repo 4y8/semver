@@ -26,9 +26,15 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
 
   let meet v v' = match v, v' with
     | Bot, _ | _, Bot -> Bot
+    | Cong (a, b), Cong (a', b') when a = Z.zero && a' = Z.zero ->
+      if b <> b' then bottom else v
+    | Cong (a, b), Cong (a', b') when a = Z.zero ->
+      if (Z.(rem (b - b') a' = zero)) then v else bottom
+    | Cong (a', b'), Cong (a, b) when a = Z.zero ->
+      if (Z.(rem (b - b') a' = zero)) then v' else bottom
     | Cong (a, b), Cong (a', b') ->
       let p, s, t = Z.gcdext a a' in
-      if Z.(rem b p = rem b' p) then
+      if Z.(rem (b - b') p = zero) then
         Cong (Z.lcm a a', Z.((b * a' * s + b' * a * t) / p))
       else Bot
 
@@ -71,6 +77,8 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
         then Bot
         else if a' = Z.zero && Z.rem a b' = Z.zero then
           Cong (b', Z.rem b b')
+        else if a = Z.zero && b = Z.zero then
+          const Z.zero
         else
           top
 

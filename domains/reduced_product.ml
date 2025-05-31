@@ -52,6 +52,7 @@ module RedProd : ValueDomain.VALUE_DOMAIN = struct
         | { zero = false ; neg = false ; pos = false } ->
           I.bottom
       in
+      let b = if a <> Z.zero then Z.erem b a else b in
       let c, i = if a = Z.zero then c, I.(meet (const b) i) else
           match i with
           | Interval.Bot -> Congruence.Bot, Interval.Bot
@@ -80,7 +81,7 @@ module RedProd : ValueDomain.VALUE_DOMAIN = struct
             let rm = Z.erem m a in
             let rb = Z.erem b a in
             let n' =
-              if Z.leq rb rn
+              if Z.(rb <= rn)
               then Z.(n - rn + rb + b)
               else Z.(n - rn + rb)
             in
@@ -155,7 +156,7 @@ module RedProd : ValueDomain.VALUE_DOMAIN = struct
 
   let is_bottom v =
     let s, c, i = rho v in
-    S.is_bottom s && C.is_bottom c && I.is_bottom i
+    S.is_bottom s
 
   let leq (s, c, i) (s', c', i') =
     S.leq s s' && C.leq c c' && I.leq i i'

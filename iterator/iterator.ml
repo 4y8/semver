@@ -127,7 +127,9 @@ module Iterator (D : Domain.DOMAIN) = struct
             List.map (fun {arc_src; _} -> arc_src) arc_src.node_in
           in
           if not D.(is_bottom (NodeMap.find arc_src map)) then
-            (assertion_failed e pos; show_map cfg map)
+            (assertion_failed e pos;
+             Format.printf "It can fail in the following environment : %a."
+               D.pp (NodeMap.find arc_src map))
           else
             print_endline "backward analysis eliminated a false positive"
         end else
