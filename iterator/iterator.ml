@@ -95,7 +95,8 @@ module Iterator (D : Domain.DOMAIN) = struct
             (if Hashtbl.mem widening_points hd then D.widen else D.join)
             D.bottom
             vals
-        in let tl =
+        in
+        let tl =
           if NodeMap.find_opt hd map = Some v
           then tl
           else out_nodes hd @ tl
@@ -106,12 +107,10 @@ module Iterator (D : Domain.DOMAIN) = struct
     let m = loop false (NodeMap.singleton cfg.cfg_init_entry D.init)
       (out_nodes cfg.cfg_init_entry)
     in
-    let main = ref (List.hd cfg.cfg_funcs) in
     let rec search_main = function
       | [] -> failwith "file has no main function"
-      | {func_name; func_entry; _} as f :: _ when
+      | {func_name; func_entry; _} :: _ when
           String.starts_with ~prefix:"main" func_name ->
-        main := f;
         let m = NodeMap.add func_entry (NodeMap.find cfg.cfg_init_exit m) m in
         loop false m (out_nodes func_entry)
       | _ :: tl -> search_main tl
@@ -127,7 +126,7 @@ module Iterator (D : Domain.DOMAIN) = struct
           let map = loop true map_fail @@
             List.map (fun {arc_src; _} -> arc_src) arc_src.node_in
           in
-          if not D.(is_bottom (NodeMap.find !main.func_entry map)) then
+          if not D.(is_bottom (NodeMap.find arc_src map)) then
             (assertion_failed e pos; show_map cfg map)
           else
             print_endline "backward analysis eliminated a false positive"
