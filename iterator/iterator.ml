@@ -33,42 +33,62 @@ module Iterator (D : Domain.DOMAIN) = struct
     end
 
   module DMap = Map.Make(struct type t = D.t let compare = compare end)
+
+  let show_map cfg map =
+    let iter_node node : unit =
+      Format.printf "<%i>: %a@ " node.node_id D.pp (NodeMap.find node map) in
+    Format.printf "Node Values:@   @[<v 0>" ;
+    List.iter iter_node cfg.cfg_nodes ;
+    Format.printf "@]"
+
   let out_nodes {node_out; _} = List.map (fun {arc_dst; _} -> arc_dst) node_out
+
   let iter cfg =
     let widening_points = Hashtbl.create 4096 in
     dfs (Hashtbl.create 4096) widening_points cfg.cfg_init_entry;
     List.iter (fun {func_entry; _} ->
         dfs (Hashtbl.create 4096) widening_points func_entry) cfg.cfg_funcs;
     let memo_funcs = FuncHash.create 4096 in
-    let rec loop map = function
+    let rec loop bwd map = function
       | [] -> map
       | hd :: tl ->
         let vals =
           List.map (fun arc ->
               match NodeMap.find_opt arc.arc_src map with
               | None -> D.top, arc
-              | Some v -> v, arc) hd.node_in
+              | Some v -> v, arc) (if bwd then hd.node_out else hd.node_in)
         in
-        let treat_instr (v, {arc_inst; _}) = match arc_inst with
+        let treat_instr (v, {arc_inst; arc_src; _}) = match arc_inst with
           | CFG_skip _ -> v
-          | CFG_assign (var, e) -> D.assign v var e
+          | CFG_assign (var, e) ->
+            if bwd then
+              D.bwd_assign (NodeMap.find arc_src map) var e v
+            else D.assign v var e
           | CFG_guard e ->
             D.guard v e
           | CFG_assert (e, _) ->
             D.guard v e
           | CFG_call f ->
-            let m = match FuncHash.find_opt memo_funcs f with
-              | None -> DMap.empty
-              | Some m -> m
-            in match DMap.find_opt v m with
-            | Some v' -> v'
-            | None ->
-              let m' = loop (NodeMap.singleton f.func_entry v)
-                  (List.map (fun {arc_dst; _} -> arc_dst) f.func_entry.node_out)
+            if bwd then
+              let m' = DMap.find v (FuncHash.find memo_funcs f) in
+              let m' = NodeMap.add f.func_exit v m' in
+              let m'' = loop true m' @@
+                List.map (fun {arc_src; _} -> arc_src) f.func_exit.node_in
               in
-              let v' = NodeMap.find f.func_exit m' in
-              FuncHash.replace memo_funcs f (DMap.add v v' m);
-              v'
+              NodeMap.find f.func_entry m''
+            else
+              let m = match FuncHash.find_opt memo_funcs f with
+                | None -> DMap.empty
+                | Some m -> m
+              in match DMap.find_opt v m with
+              | Some m' -> NodeMap.find f.func_exit m'
+              | None ->
+                let m' = loop false (NodeMap.singleton f.func_entry v) @@
+                  out_nodes f.func_entry
+                in
+                let v' = NodeMap.find f.func_exit m' in
+                FuncHash.replace memo_funcs f (DMap.add v m' m);
+                v'
         in
         let vals = List.map treat_instr vals in
         let v = List.fold_left
@@ -80,39 +100,47 @@ module Iterator (D : Domain.DOMAIN) = struct
           then tl
           else out_nodes hd @ tl
         in
-        loop (NodeMap.add hd v map) tl
+        loop bwd (NodeMap.add hd v map) tl
     in
 
-    let m = loop (NodeMap.singleton cfg.cfg_init_entry D.init)
+    let m = loop false (NodeMap.singleton cfg.cfg_init_entry D.init)
       (out_nodes cfg.cfg_init_entry)
     in
+    let main = ref (List.hd cfg.cfg_funcs) in
     let rec search_main = function
       | [] -> failwith "file has no main function"
-      | {func_name; func_entry; _} :: _ when
+      | {func_name; func_entry; _} as f :: _ when
           String.starts_with ~prefix:"main" func_name ->
+        main := f;
         let m = NodeMap.add func_entry (NodeMap.find cfg.cfg_init_exit m) m in
-
-        loop m (out_nodes func_entry)
+        loop false m (out_nodes func_entry)
       | _ :: tl -> search_main tl
-    in search_main cfg.cfg_funcs
+    in
+    let map = search_main cfg.cfg_funcs in
+    let check_assertation {arc_inst; arc_src; _} = match arc_inst with
+    | CFG_assert (e, pos) ->
+      let v = NodeMap.find arc_src map in
+      let fail = D.guard v (CFG_bool_unary (AbstractSyntax.AST_NOT, e)) in
+      if not D.(is_bottom fail) then
+        if !Options.backward then begin
+          let map_fail = NodeMap.add arc_src fail map in
+          let map = loop true map_fail @@
+            List.map (fun {arc_src; _} -> arc_src) arc_src.node_in
+          in
+          if not D.(is_bottom (NodeMap.find !main.func_entry map)) then
+            (assertion_failed e pos; show_map cfg map)
+          else
+            print_endline "backward analysis eliminated a false positive"
+        end else
+          assertion_failed e pos
+    | _ -> ()
+    in
+    List.iter check_assertation cfg.cfg_arcs;
+    map
 end
 
 let iterate cfg (module D : Domains.Domain.DOMAIN) =
   let module I = Iterator(D) in
   let map = I.iter cfg in
   let _ = Random.self_init () in
-  print_endline "ee";
-  let check_assertation {arc_inst; arc_src; _} = match arc_inst with
-    | CFG_assert (e, pos) ->
-      let v = NodeMap.find arc_src map in
-      if not D.(is_bottom @@
-                guard v (CFG_bool_unary (AbstractSyntax.AST_NOT, e))) then
-        assertion_failed e pos;
-    | _ -> ()
-  in
-  List.iter check_assertation cfg.cfg_arcs;
-  let iter_node node : unit =
-    Format.printf "<%i>: %a@ " node.node_id D.pp (NodeMap.find node map) in
-  Format.printf "Node Values:@   @[<v 0>" ;
-  List.iter iter_node cfg.cfg_nodes ;
-  Format.printf "@]"
+  I.show_map cfg map

@@ -6,7 +6,10 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
   type t = cong
 
   let bottom = Bot
+
   let top = Cong (Z.one, Z.zero)
+
+  let is_bottom = (=) Bot
 
   let const n = Cong (Z.zero, n)
 
@@ -35,7 +38,8 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
       Cong (Z.(gcd (gcd a a') (abs (b - b'))), b)
 
   let widen = join
-  let narrow v v' = v (* pas optimal mais on n'utilise pas de resserrement *)
+  let narrow v v' =
+    if is_bottom v' then bottom else v (* pas optimal mais on n'utilise pas de resserrement *)
 
   let pp fmt = function
     | Bot -> Format.fprintf fmt "⊥"
@@ -120,6 +124,4 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
               meet x (Cong (b', d)), y
             else
               x, y
-
-  let is_bottom = (=) Bot
 end

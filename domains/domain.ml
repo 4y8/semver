@@ -40,6 +40,8 @@ module type DOMAIN = sig
   (* filter environments to keep only those satisfying the boolean expression *)
   val guard : t -> bool_expr -> t
 
+  val bwd_assign : t -> var -> int_expr -> t -> t
+
   (* abstract join *)
   val join : t -> t -> t
 

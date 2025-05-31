@@ -13,6 +13,7 @@ open Arg
 
 (* Flags *)
 let verbose = ref false
+let backward = ref false
 
 (* string arguments *)
 let file = ref ""
@@ -23,6 +24,8 @@ let domain = ref ""
 
 let args =
   [ ("-v", Set verbose, " Execute the analyzer in verbose/debug mode")
+  ; ("--backward", Set backward,
+     " Enable backward analysis on failed assertions")
   ; ( "--dot-out"
     , Set_string cfg_out
     , " Print the cfg in this file (default is cfg.dot)" )

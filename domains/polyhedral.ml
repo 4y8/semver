@@ -103,12 +103,14 @@ module Polyhedral (V : Domain.VARS) () : Domain.DOMAIN = struct
         Tcons1.array_set a 0 Tcons1.(make (Texpr1.of_expr env e) op);
         Abstract1.meet_tcons_array manager acc a
     in
-    Format.printf "%a\n" Abstract1.print (build_polyhedron x e);
     build_polyhedron x e
 
   let assign x v e =
     let e = Texpr1.of_expr env (expr1_of_int_expr e) in
     Abstract1.assign_texpr manager x (apron_var_of_var v) e None
+
+  (* we didn't implement backward assignment yet *)
+  let bwd_assign x v e r = x
 
   let pp = Abstract1.print
 end
