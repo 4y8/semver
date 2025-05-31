@@ -76,11 +76,14 @@ module Congruence : (ValueDomain.VALUE_DOMAIN with type t = cong) = struct
         if a' = Z.zero && b' = Z.zero
         then Bot
         else if a' = Z.zero && Z.rem a b' = Z.zero then
+          if Z.rem b b' = Z.zero then
+            const Z.zero
+              else
           Cong (b', Z.rem b b')
         else if a = Z.zero && b = Z.zero then
           const Z.zero
         else
-          top
+          Cong (Z.(gcd (gcd a a') b'), b)
 
   let rec compare v v' op = match v, v' with
     | Bot, _ | _, Bot -> Bot, Bot
